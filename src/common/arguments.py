@@ -46,7 +46,7 @@ def get_common_args():
     parser.add_argument('--clip', type=float, default=0.2, help='')  # 5000
     parser.add_argument('--schedule_clip', type=str, default='linear', help='')#5000
     parser.add_argument('--actor_sample_times', type=int, default=5, help='actor_train_steps')  # 1
-
+    parser.add_argument('--cuda_id', type=int, default=0)  # TODO
     args = parser.parse_args()
     return args
 

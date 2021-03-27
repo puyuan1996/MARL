@@ -40,7 +40,8 @@ if __name__ == '__main__':
         args.state_shape = env_info["state_shape"]
         args.obs_shape = env_info["obs_shape"]
         args.episode_limit = env_info["episode_limit"]
-        print(f'map:{args.map},episode_limit:{args.episode_limit}')
+
+        print(f'map:{args.map},episode_limit:{args.episode_limit}',  print(f'cuda_id:{args.cuda_id}'))
 
         print(f'n_epoch:{args.n_epoch}')
 
