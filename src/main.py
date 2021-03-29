@@ -7,7 +7,7 @@ import torch
 import numpy as np
 
 if __name__ == '__main__':
-    for i in [0,1,2,3,4,5,6,7]:
+    for i in [0,1,2,3,4]:
     # for i in [1, 2, 5]:  # range(8):
         args = get_common_args()
         if args.alg.find('coma') > -1:
