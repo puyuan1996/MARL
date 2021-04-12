@@ -45,6 +45,7 @@ if __name__ == '__main__':
 
         print(f'n_epoch:{args.n_epoch}')
 
+        torch.cuda.set_device(args.cuda_id)  # id=0, 1, 2 ,4等  #todo
         runner = Runner(env, args)
         if args.learn:
             runner.run(i)

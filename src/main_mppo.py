@@ -1,5 +1,5 @@
 from runner import Runner
-from runner_qmix_ppo import Runner
+from runner_mppo import Runner
 from smac.env import StarCraft2Env
 from common.arguments import get_common_args, get_coma_args, get_mixer_args, get_centralv_args, get_reinforce_args, get_commnet_args, get_g2anet_args
 import torch
@@ -38,9 +38,10 @@ if __name__ == '__main__':
         args.state_shape = env_info["state_shape"]
         args.obs_shape = env_info["obs_shape"]
         args.episode_limit = env_info["episode_limit"]
-        print(f'map:{args.map},episode_limit:{args.episode_limit}')
+        print(f'map:{args.map},episode_limit:{args.episode_limit}',  print(f'cuda_id:{args.cuda_id}'))
+        print(f'n_epoch:{args.n_epoch}')
 
-
+        torch.cuda.set_device(args.cuda_id)  # id=0, 1, 2 ,4等  #todo
         runner = Runner(env, args)
         if args.learn:
             runner.run(i)

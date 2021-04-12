@@ -6,11 +6,9 @@ from network.qmix_net_linear import QMixNet #todo
 from .misc import gumbel_softmax
 import copy
 import torch.nn.functional as F
-# torch.cuda.set_device(5)  # id=0, 1, 2 ,4等
 
 class QMIX_PG():
     def __init__(self, agent, args):
-        torch.cuda.set_device(args.cuda_id)  # id=0, 1, 2 ,4等  #todo
         self.args = args
         self.log_alpha = torch.zeros(1, dtype=torch.float32)#, requires_grad=True)
         if args.cuda:

@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 if __name__ == '__main__':
-    for i in range(8):
+    for i in range(5):
         args = get_common_args()
         if args.alg.find('coma') > -1:
             args = get_coma_args(args)
@@ -43,6 +43,11 @@ if __name__ == '__main__':
         args.epsilon_finish=0.05
         args.epsilon_anneal_time=50000
 
+        print(f'map:{args.map},episode_limit:{args.episode_limit}',  print(f'cuda_id:{args.cuda_id}'))
+
+        print(f'n_epoch:{args.n_epoch}')
+
+        torch.cuda.set_device(args.cuda_id)  # id=0, 1, 2 ,4等  #todo
         runner = Runner(env, args)
         if args.learn:
             runner.run(i)
