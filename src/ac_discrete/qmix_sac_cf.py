@@ -7,7 +7,7 @@ import copy
 import torch.nn.functional as F
 import numpy as np
 
-torch.cuda.set_device(4)  # id=0, 1, 2 ,4等
+# torch.cuda.set_device(4)  # id=0, 1, 2 ,4等
 
 
 class QMIX_PG():

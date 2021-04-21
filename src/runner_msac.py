@@ -6,7 +6,7 @@ from common.replay_buffer import ReplayBuffer
 import matplotlib.pyplot as plt
 
 # from pg_softmax.qmix_sac_cf_sample5 import QMIX_PG  # TODO
-# from pg_discrete.qmix_sac_cf import QMIX_PG  # TODO
+# from ac_discrete.qmix_sac_cf import QMIX_PG  # TODO
 from ac_discrete.qmix_sac import QMIX_PG  # TODO
 from agent.agent_msac import Agents
 import torch
