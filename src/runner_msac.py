@@ -5,7 +5,7 @@ from common.replay_buffer import ReplayBuffer
 import matplotlib.pyplot as plt
 
 from ac_discrete.qmix_msac import QMIX_PG  # TODO
-from agent.agent_msac import Agents
+from agent.agent_msac_mcsac import Agents
 
 class Runner:
     def __init__(self, env, args):

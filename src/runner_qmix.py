@@ -5,10 +5,6 @@ from common.rollout_qmix import RolloutWorker, CommRolloutWorker
 from agent.agent import Agents, CommAgents
 from common.replay_buffer import ReplayBuffer
 import matplotlib.pyplot as plt
-# from pg.basic_controller import MAgents
-from policy.qmix import QMIX  # TODO
-# from agent.agent_pg import Agents
-
 
 class Runner:
     def __init__(self, env, args):
@@ -25,15 +21,11 @@ class Runner:
         if args.learn and args.alg.find('coma') == -1 and args.alg.find('central_v') == -1 and args.alg.find(
                 'reinforce') == -1:  # these 3 algorithms are on-poliy
             self.critic_buffer = ReplayBuffer(args, args.critic_buffer_size)
-            # self.actor_buffer = ReplayBuffer(args, args.actor_buffer_size)
         self.args = args
         self.win_rates = []
         self.episode_rewards = []
 
         # 用来保存plt和pkl
-        # self.save_path = self.args.result_dir + '/'  +'pg_gumbel_softmax_logpi' + '/' + args.alg  +'/'+ args.map
-        # self.save_path = self.args.result_dir + '/'  +'ac_sample1' + '/' + args.alg  +'/'+ args.map
-        # self.save_path = self.args.result_dir + '_my' + '/'+'hard_update'+'/' + args.alg + '/' + args.map
         self.save_path = self.args.result_dir + '_my' + '/'+'soft_update'+'/' + args.alg + '/' + args.map
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
@@ -73,11 +65,6 @@ class Runner:
                     mini_batch = self.critic_buffer.sample(min(self.critic_buffer.current_size, self.args.critic_batch_size))  # 32 episodes
                     self.agents.train(mini_batch, train_steps)
                     train_steps += 1
-                # if epoch % self.args.actor_update_delay == 0:  # 2
-                #     for train_step in range(self.args.actor_train_steps):  # 1
-                #         mini_batch = self.actor_buffer.sample(
-                #             min(self.actor_buffer.current_size, self.args.actor_batch_size))  # 16 episodes
-                #         self.qmix_pg_learner.train_actor(mini_batch, self.args.episode_limit)
         self.plt(num)
 
     def evaluate(self):

@@ -18,8 +18,10 @@ def get_common_args():
     # The alternative algorithms are vdn, coma, central_v, qmix, qtran_base,
     # qtran_alt, reinforce, coma+commnet, central_v+commnet, reinforce+commnet，
     # coma+g2anet, central_v+g2anet, reinforce+g2anet, maven
-    parser.add_argument('--alg', type=str, default='qmix', help='the algorithm to train the agent')  #  qmix reinforce+g2anet
-    parser.add_argument('--last_action', type=bool, default=True, help='whether to use the last action to choose action')
+    parser.add_argument('--alg', type=str, default='qmix',
+                        help='the algorithm to train the agent')  # qmix reinforce+g2anet
+    parser.add_argument('--last_action', type=bool, default=True,
+                        help='whether to use the last action to choose action')
     parser.add_argument('--reuse_network', type=bool, default=True, help='whether to use one network for all agents')
     parser.add_argument('--gamma', type=float, default=0.99, help='discount factor')
     parser.add_argument('--optimizer', type=str, default="RMS", help='optimizer')
@@ -29,22 +31,23 @@ def get_common_args():
     parser.add_argument('--load_model', type=bool, default=False, help='whether to load the pretrained model')
     parser.add_argument('--learn', type=bool, default=True, help='whether to train the model')
     parser.add_argument('--cuda', type=bool, default=False, help='whether to use the GPU')
-    parser.add_argument('--n_epoch',type=int, default=30000, help='n_epoch')
-    parser.add_argument('--actor_buffer_size', type=int, default=32, help='actor_buffer_size') #32
-    parser.add_argument('--critic_buffer_size', type=int, default=32, help='critic_buffer_size') #32
-    parser.add_argument('--actor_update_delay', type=int, default=2, help='actor_update_delay') #2
-    parser.add_argument('--actor_train_steps', type=int, default=1, help='actor_train_steps')#1
-    parser.add_argument('--critic_lr', type=float, default=5e-4, help='critic_lr')#1
-    parser.add_argument('--anneal_epsilon', type=float, default=2.4e-05, help='critic_lr')  # 4.8e-05 10000 ;2.4e-05 20000;  1.6e-05 30000; 1.2e-05 40000
+    parser.add_argument('--n_epoch', type=int, default=30000, help='n_epoch')
+    parser.add_argument('--actor_buffer_size', type=int, default=32, help='actor_buffer_size')  # 32
+    parser.add_argument('--critic_buffer_size', type=int, default=32, help='critic_buffer_size')  # 32
+    parser.add_argument('--actor_update_delay', type=int, default=2, help='actor_update_delay')  # 2
+    parser.add_argument('--actor_train_steps', type=int, default=1, help='actor_train_steps')  # 1
+    parser.add_argument('--critic_lr', type=float, default=5e-4, help='critic_lr')  # 1
+    parser.add_argument('--anneal_epsilon', type=float, default=2.4e-05,
+                        help='critic_lr')  # 4.8e-05 10000 ;2.4e-05 20000;  1.6e-05 30000; 1.2e-05 40000
     parser.add_argument('--temp', type=float, default=1., help='softmax_temp')
-    parser.add_argument('--loss_coeff_entropy', type=float, default=0.2, help='loss_coeff_entropy')#0.01
+    parser.add_argument('--loss_coeff_entropy', type=float, default=0.2, help='loss_coeff_entropy')  # 0.01
     parser.add_argument('--advantage_norm', type=bool, default=True, help='advantage_norm')
     parser.add_argument('--alpha', type=float, default=0.2, help='alpha')
     parser.add_argument('--auto_entropy', type=bool, default=True, help='auto_entropy')
-    parser.add_argument('--buffer_size', type=int, default=5000, help='actor_buffer_size')#5000
-    parser.add_argument('--ppo_buffer_size', type=int, default=32, help='actor_buffer_size')#5000
+    parser.add_argument('--buffer_size', type=int, default=5000, help='actor_buffer_size')  # 5000
+    parser.add_argument('--ppo_buffer_size', type=int, default=32, help='actor_buffer_size')  # 5000
     parser.add_argument('--clip', type=float, default=0.2, help='')  # 5000
-    parser.add_argument('--schedule_clip', type=str, default='linear', help='')#5000
+    parser.add_argument('--schedule_clip', type=str, default='linear', help='')  # 5000
     parser.add_argument('--actor_sample_times', type=int, default=5, help='actor_train_steps')  # 1
     parser.add_argument('--cuda_id', type=int, default=0)  # TODO
     args = parser.parse_args()
@@ -69,7 +72,7 @@ def get_coma_args(args):
     args.td_lambda = 0.8
 
     # the number of the epoch to train the agent
-    args.n_epoch = 30000 #TODO
+    args.n_epoch = 30000  # TODO
 
     # the number of the episodes in one epoch
     args.n_episodes = 1
@@ -112,7 +115,7 @@ def get_mixer_args(args):
     args.epsilon = 0.5
     # args.anneal_epsilon = 2.4e-05 # 4.8e-05 10000 ;2.4e-05 20000;  1.6e-05 30000; 1.2e-05 40000
     args.min_epsilon = 0.02  # lower-bounds the probability of any given action by episolin/|A|:
-    args.epsilon_anneal_scale = 'epoch'#'episode'
+    args.epsilon_anneal_scale = 'epoch'  # 'episode'
 
     # the number of the epoch to train the agent
     # args.n_epoch = 30000
@@ -241,4 +244,3 @@ def get_g2anet_args(args):
     args.attention_dim = 32
     args.hard = True
     return args
-

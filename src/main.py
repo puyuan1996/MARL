@@ -1,14 +1,14 @@
-# from runner import Runner # TODO COMA
 from runner_msac import Runner
-# from runner_mcac import Runner # TODO
+# from runner_mcsac import Runner # to run mCSAC method
+# from runner_mcac import Runner # to run mCAC method
 from smac.env import StarCraft2Env
-from common.arguments import get_common_args, get_coma_args, get_mixer_args, get_centralv_args, get_reinforce_args, get_commnet_args, get_g2anet_args
+from common.arguments import get_common_args, get_coma_args, get_mixer_args, \
+    get_centralv_args, get_reinforce_args, get_commnet_args, get_g2anet_args
 import torch
 import numpy as np
 
 if __name__ == '__main__':
-    for i in [0,1,2,3,4]:
-    # for i in [1, 2, 5]:  # range(8):
+    for i in [0, 1, 2, 3, 4]:
         args = get_common_args()
         if args.alg.find('coma') > -1:
             args = get_coma_args(args)
@@ -23,8 +23,7 @@ if __name__ == '__main__':
         if args.alg.find('g2anet') > -1:
             args = get_g2anet_args(args)
         # Set seeds
-        # env.seed(args.seed)
-        args.seed=i
+        args.seed = i
         torch.manual_seed(args.seed)
         np.random.seed(args.seed)
 
@@ -41,11 +40,10 @@ if __name__ == '__main__':
         args.obs_shape = env_info["obs_shape"]
         args.episode_limit = env_info["episode_limit"]
 
-        print(f'map:{args.map},episode_limit:{args.episode_limit}',  print(f'cuda_id:{args.cuda_id}'))
-
+        print(f'map:{args.map},episode_limit:{args.episode_limit}', print(f'cuda_id:{args.cuda_id}'))
         print(f'n_epoch:{args.n_epoch}')
 
-        torch.cuda.set_device(args.cuda_id)  # id=0, 1, 2 ,4等  #todo
+        torch.cuda.set_device(args.cuda_id)  # todo
         runner = Runner(env, args)
         if args.learn:
             runner.run(i)
