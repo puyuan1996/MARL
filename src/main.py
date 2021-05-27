@@ -8,7 +8,7 @@ import torch
 import numpy as np
 
 if __name__ == '__main__':
-    for i in [0, 1, 2, 3, 4]:
+    for i in range(5):
         args = get_common_args()
         if args.alg.find('coma') > -1:
             args = get_coma_args(args)

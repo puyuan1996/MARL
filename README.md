@@ -1,5 +1,5 @@
 # StarCraft II micromanagement
-Our code is modified from https://github.com/starry-sky6688/StarCraft
+Our code is modified from https://github.com/starry-sky6688/StarCraft.
 
 This repository is our Pytorch implementations for Decomposed Soft Actor-Critic Method for Cooperative Multi-Agent Reinforcement Learning(https://arxiv.org/abs/2104.06655). 
 

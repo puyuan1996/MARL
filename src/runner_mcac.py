@@ -1,7 +1,6 @@
 import numpy as np
 import os
-from common.rollout import RolloutWorker, CommRolloutWorker
-# from agent.agent import Agents, CommAgents
+from common.rollout import RolloutWorker
 from common.replay_buffer import ReplayBuffer
 import matplotlib.pyplot as plt
 
@@ -14,13 +13,9 @@ class Runner:
         self.env = env
         self.args = args
 
-        if args.alg.find('commnet') > -1 or args.alg.find('g2anet') > -1:  # communication agent
-            self.agents = CommAgents(args)
-            self.rolloutWorker = CommRolloutWorker(env, self.agents, args)
-        else:  # no communication agent
-            self.agents = Agents(args)
-            self.qmix_pg_learner = QMIX_PG(self.agents, args)
-            self.rolloutWorker = RolloutWorker(env, self.agents, args)
+        self.agents = Agents(args)
+        self.qmix_pg_learner = QMIX_PG(self.agents, args)
+        self.rolloutWorker = RolloutWorker(env, self.agents, args)
         if args.learn and args.alg.find('coma') == -1 and args.alg.find('central_v') == -1 and args.alg.find(
                 'reinforce') == -1:  # these 3 algorithms are on-poliy
             self.critic_buffer = ReplayBuffer(args, args.critic_buffer_size)
