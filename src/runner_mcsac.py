@@ -4,7 +4,7 @@ from common.rollout import RolloutWorker, CommRolloutWorker
 from common.replay_buffer import ReplayBuffer
 import matplotlib.pyplot as plt
 
-from ac_discrete.qmix_msac import QMIX_PG  # TODO
+from ac_discrete.qmix_mcsac import QMIX_PG  #
 from agent.agent_msac import Agents
 
 class Runner:
@@ -30,7 +30,7 @@ class Runner:
         # 用来保存plt和pkl
         tmp = f'clamp2-5_rewardscale10_' + f'{args.buffer_size}_{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_' \
                                            f'{args.actor_update_delay}_{args.critic_lr}_{args.n_epoch}_{args.temp}'  # f'clamp2-5_'+ rewardscale10_
-        self.save_path = self.args.result_dir + '/linear_mix/' + 'msac' + '/' + tmp + '/' + args.map  # _gradclip0.5
+        self.save_path = self.args.result_dir + '/linear_mix/' + 'mcsac' + '/' + tmp + '/' + args.map  # _gradclip0.5
 
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
