@@ -107,7 +107,6 @@ class COMA:
         pi_taken[mask == 0] = 1.0  # 因为要取对数，对于那些填充的经验，所有概率都为0，取了log就是负无穷了，所以让它们变成1
         log_pi_taken = torch.log(pi_taken)
 
-
         # 计算advantage
         baseline = (q_values * action_prob).sum(dim=3, keepdim=True).squeeze(3).detach()
         advantage = (q_taken - baseline).detach()

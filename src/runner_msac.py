@@ -1,15 +1,11 @@
 import numpy as np
 import os
 from common.rollout import RolloutWorker, CommRolloutWorker
-# from agent.agent import Agents, CommAgents
 from common.replay_buffer import ReplayBuffer
 import matplotlib.pyplot as plt
 
-# from pg_softmax.qmix_sac_cf_sample5 import QMIX_PG  # TODO
-# from ac_discrete.qmix_sac_cf import QMIX_PG  # TODO
-from ac_discrete.qmix_sac import QMIX_PG  # TODO
+from ac_discrete.qmix_msac import QMIX_PG  # TODO
 from agent.agent_msac import Agents
-import torch
 
 class Runner:
     def __init__(self, env, args):
@@ -33,13 +29,10 @@ class Runner:
         self.episode_rewards = []
 
         # 用来保存plt和pkl
-
         tmp = f'clamp2-5_rewardscale10_' + f'{args.buffer_size}_{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_' \
                                            f'{args.actor_update_delay}_{args.critic_lr}_{args.n_epoch}_{args.temp}'  # f'clamp2-5_'+ rewardscale10_
         self.save_path = self.args.result_dir + '/linear_mix/' + 'msac' + '/' + tmp + '/' + args.map  # _gradclip0.5
 
-        # --map = 3m - -alg = qmix --actor_buffer_size=5000  --critic_buffer_size=5000  --cuda=True
-        # self.save_path = self.args.result_dir + '_my' + '/' + 'ac_local-total' + '/' + args.alg + '/' + args.map
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
 
@@ -57,10 +50,6 @@ class Runner:
                 self.plt(num)
 
             episodes = []
-            # epsilon = 0 if evaluate else self.epsilon
-            # if self.args.epsilon_anneal_scale == 'episode':
-            #     epsilon = epsilon - self.args.anneal_epsilon if epsilon > self.args.min_epsilon else epsilon
-
             if self.args.epsilon_anneal_scale == 'epoch':
                 epsilon = epsilon - self.args.anneal_epsilon if epsilon > self.args.min_epsilon else epsilon
             # 收集self.args.n_episodes个episodes
@@ -80,16 +69,10 @@ class Runner:
                 train_steps += 1
             else:
                 self.actor_critic_buffer.store_episode(episode_batch)
-                # self.actor_buffer.store_episode(episode_batch)
-                # if epoch % 16 == 0:  # 2
                 for train_step in range(self.args.critic_train_steps):  # 1  # 16
                     mini_batch = self.actor_critic_buffer.sample(min(self.actor_critic_buffer.current_size, self.args.critic_batch_size))  # 32 episodes # 16
                     self.qmix_pg_learner.train_critic(mini_batch, self.args.episode_limit, train_steps)
                     train_steps += 1
-                    # # if epoch % self.args.actor_update_delay == 0:  # 2
-                    # for train_step in range(self.args.actor_train_steps):  # 1 # 16
-                    #     mini_batch = self.actor_critic_buffer.sample(
-                    #         min(self.actor_critic_buffer.current_size, self.args.actor_batch_size))  # 16 episodes  # 16
                     self.qmix_pg_learner.train_actor(mini_batch, self.args.episode_limit, self.args.actor_sample_times)
         self.plt(num)
 

@@ -4,19 +4,9 @@ from common.rollout import RolloutWorker, CommRolloutWorker
 # from agent.agent import Agents, CommAgents
 from common.replay_buffer import ReplayBuffer
 import matplotlib.pyplot as plt
-# from pg.basic_controller import MAgents
-# from pg.qmix_ac_sample import QMIX_PG  # TODO
-# from pg.qmix_ac_total import QMIX_PG  # TODO
-# from pg.qmix_ac_total_counterfactual import QMIX_PG  # TODO
-# from pg.qmix_ac_local-total_counterfactual import QMIX_PG  # TODO
-# from pg.qmix_ac_local-total import QMIX_PG  # TODO
-# from agent.agent_pg import Agents
-# from pg_softmax.qmix_ac_total import QMIX_PG  # TODO
-from ac_discrete.qmix_ac_total_counterfactual import QMIX_PG  # TODO
-# from pg_softmax.qmix_sac import QMIX_PG  # TODO
+
+from ac_discrete.qmix_mcac import QMIX_PG  # TODO
 from agent.agent_mcac import Agents
-# from pg.qmix_ddpg import QMIX_PG  # TODO
-# from agent.agent_pg_ddpg import Agents
 
 class Runner:
     def __init__(self, env, args):
@@ -38,43 +28,10 @@ class Runner:
         self.win_rates = []
         self.episode_rewards = []
 
-        # 用来保存plt和pkl
-        # self.save_path = self.args.result_dir + '/'  +'pg_gumbel_softmax_logpi' + '/' + args.alg  +'/'+ args.map
-        # self.save_path = self.args.result_dir + '/'  +'ac_sample1' + '/' + args.alg  +'/'+ args.map
-        # self.save_path = self.args.result_dir + '_my' + '/' + 'ac' + '/' + args.alg + '/' + args.map
-        # self.save_path = self.args.result_dir + '_my' + '/' + 'ac_qtotal' + '/' + args.alg + '/' + args.map
-        # tmp = f'clamp2-5_advnorm_entropy_'+f'{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_' \
-        #                                    f'{args.actor_update_delay}_{args.critic_lr}_{args.loss_coeff_entropy}'
-
-        # tmp =f'{args.anneal_epsilon}_'+ f'{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_' \
-        #                                      f'{args.actor_update_delay}_{args.critic_lr}'
-        # self.save_path = self.args.result_dir + '_qmix_ddpg' + '/' + tmp + '/'+args.alg + '/' + args.map
-
-
         tmp = f'clamp2-5_' + f'{args.loss_coeff_entropy}_'+f'{args.buffer_size}_{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_' \
                              f'{args.actor_update_delay}_{args.critic_lr}'  # f'clamp2-5_'+  anneal_epsilon
         self.save_path = self.args.result_dir+'/linear_mix/' + 'qmix_ac_total_cf' + '/' + tmp + '/' + args.map
 
-        # tmp = f'seq-agent-update_clamp2-5_advnorm_{args.anneal_epsilon}_'+f'{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_{args.actor_update_delay}_{args.critic_lr}'
-
-        # tmp = f'clamp2-5_advnorm_'+f'{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_{args.actor_update_delay}_{args.critic_lr}'
-        # self.save_path = 'onpolicy/' + self.args.result_dir + '_my_softmax_epsilon' + '/' + 'ac_total' + '/' + tmp + '/' + args.alg + '/' + args.map
-
-        # tmp = f'clamp0-1' + f'{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_{args.actor_update_delay}_{args.critic_lr}'
-        # self.save_path = 'qmix-sac/'  + '/' + tmp + '/' + args.alg + '/' + args.map
-
-
-        # self.save_path = 'test/' + args.alg + '/' + args.map
-
-        # tmp = '32_2_1_1e-4'
-        # self.save_path = self.args.result_dir  + '/' + 'ac_sample' + '/' + tmp + '/' + args.alg + '/' + args.map
-        # self.save_path = self.args.result_dir  + '/' + 'ac_sample_evalmax' + '/' + tmp + '/' + args.alg + '/' + args.map
-        # self.save_path = self.args.result_dir  + '/' + 'ac_total' + '/' + tmp + '/' + args.alg + '/' + args.map
-        # self.save_path = self.args.result_dir + '_softmax_evalmax_epsilon' + '/' + 'ac_total'+ '/' + tmp + '/' + args.alg + '/' + args.map
-
-
-        # --map = 3m - -alg = qmix --actor_buffer_size=5000  --critic_buffer_size=5000  --cuda=True
-        # self.save_path = self.args.result_dir + '_my' + '/' + 'ac_local-total' + '/' + args.alg + '/' + args.map
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
 
@@ -92,10 +49,6 @@ class Runner:
                 self.plt(num)
 
             episodes = []
-            # epsilon = 0 if evaluate else self.epsilon
-            # if self.args.epsilon_anneal_scale == 'episode':
-            #     epsilon = epsilon - self.args.anneal_epsilon if epsilon > self.args.min_epsilon else epsilon
-
             if self.args.epsilon_anneal_scale == 'epoch':
                 epsilon = epsilon - self.args.anneal_epsilon if epsilon > self.args.min_epsilon else epsilon
             # 收集self.args.n_episodes个episodes

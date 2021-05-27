@@ -1,16 +1,32 @@
 import torch
 import os
 from network.base_net import RNN
-from network.qmix_net import QMixNet
-from .misc import gumbel_softmax
+from network.qmix_net_linear import QMixNet  # todo
+from .misc import gumbel_softmax, disable_gradients, enable_gradients
 import copy
+import torch.nn.functional as F
+import numpy as np
+
+# torch.cuda.set_device(4)  # id=0, 1, 2 ,4等
+
+
 class QMIX_PG():
-    def __init__(self,agent, args):
+    def __init__(self, agent, args):
+        self.args = args
+        self.log_alpha = torch.zeros(1, dtype=torch.float32)  # , requires_grad=True)
+        if args.cuda:
+            self.log_alpha = self.log_alpha.cuda()
+        self.log_alpha.requires_grad = True
+
+        self.alpha = self.args.alpha
+        self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=3e-4)
+
         self.agent = agent
-        self.target_policy = copy.deepcopy(self.agent.policy) # TODO
+        # self.target_policy = copy.deepcopy(self.agent.policy)  # TODO
 
         self.policy_params = list(agent.policy.parameters())
-        self.policy_optimiser = torch.optim.RMSprop(params=self.policy_params, lr=args.actor_lr)#, alpha=args.optim_alpha, eps=args.optim_eps)
+        self.policy_optimiser = torch.optim.RMSprop(params=self.policy_params,
+                                                    lr=args.actor_lr)  # , alpha=args.optim_alpha, eps=args.optim_eps)
         self.n_actions = args.n_actions
         self.n_agents = args.n_agents
         self.state_shape = args.state_shape
@@ -41,7 +57,13 @@ class QMIX_PG():
             self.target_qmix_net.cuda()
             self.eval_qmix_net_2.cuda()
             self.target_qmix_net_2.cuda()
-        self.model_dir = args.model_dir + '/' + args.alg + '/' + args.map
+
+        # self.model_dir = args.model_dir + '/' + args.alg + '/' + args.map
+
+        tmp = f'clamp2-5_rewardscale10_' + f'{args.buffer_size}_{args.actor_buffer_size}_{args.critic_buffer_size}_{args.actor_train_steps}_{args.critic_train_steps}_' \
+                                           f'{args.actor_update_delay}_{args.critic_lr}'
+
+        self.model_dir = args.model_dir + '/linear_mix/' + 'qmix_sac_cf' + '/' + tmp + '/' + args.map  # _gradclip0.5
         # 如果存在模型则加载模型
         if self.args.load_model:
             if os.path.exists(self.model_dir + '/rnn_net_params.pkl'):
@@ -53,7 +75,7 @@ class QMIX_PG():
                 self.eval_rnn_2.load_state_dict(torch.load(path_rnn, map_location=map_location))
                 self.eval_qmix_net.load_state_dict(torch.load(path_qmix, map_location=map_location))
                 self.eval_qmix_net_2.load_state_dict(torch.load(path_qmix, map_location=map_location))
-                self.target_policy.load_state_dict(torch.load(path_policy, map_location=map_location)) # TODO
+                # self.target_policy.load_state_dict(torch.load(path_policy, map_location=map_location))  # TODO
                 print('Successfully load the model: {} and {}'.format(path_rnn, path_qmix))
             else:
                 raise Exception("No model!")
@@ -63,7 +85,7 @@ class QMIX_PG():
         self.target_rnn_2.load_state_dict(self.eval_rnn.state_dict())
         self.target_qmix_net.load_state_dict(self.eval_qmix_net.state_dict())
         self.target_qmix_net_2.load_state_dict(self.eval_qmix_net_2.state_dict())
-        self.target_policy.load_state_dict(self.agent.policy.state_dict())  # TODO
+        # self.target_policy.load_state_dict(self.agent.policy.state_dict())  # TODO
 
         self.eval_parameters = list(self.eval_qmix_net.parameters()) + list(self.eval_rnn.parameters())
         if args.optimizer == "RMS":
@@ -79,19 +101,7 @@ class QMIX_PG():
         self.target_hidden = None
         print('Init alg QMIX')
 
-    def train_actor(self, batch, max_episode_len):#EpisodeBatch
-        # Get the relevant quantities
-        # bs = batch.batch_size
-        # max_t = batch.max_seq_length
-        # actions = batch["u"][:, :-1]
-        # terminated = batch["terminated"][:, :-1].float()
-        # avail_actions = batch["avail_u"][:, :-1]
-        # # mask = batch["filled"][:, :-1].float()
-        # mask = 1 - batch["padded"].float()
-        # mask[:, 1:] = mask[:, 1:] * (1 - terminated[:, :-1])
-        # mask = mask.repeat(1, 1, self.n_agents).view(-1)
-        # states = batch["s"][:, :-1]
-
+    def train_actor(self, batch, max_episode_len, actor_sample_times=1):  # EpisodeBatch
         episode_num = batch['o'].shape[0]
         self.init_hidden(episode_num)
         for key in batch.keys():  # 把batch里的数据转化成tensor
@@ -102,24 +112,26 @@ class QMIX_PG():
         # s, s_next, u, r, avail_u, avail_u_next, terminated = batch['s'], batch['s_next'], batch['u'], \
         #                                                      batch['r'], batch['avail_u'], batch['avail_u_next'], \
         #                                                      batch['terminated']
-        terminated=batch['terminated']
+        s = batch['s']
+        terminated = batch['terminated']
         mask = 1 - batch["padded"].float()  # 用来把那些填充的经验的TD-error置0，从而不让它们影响到学习
         mask[:, 1:] = mask[:, 1:] * (1 - terminated[:, :-1])
         mask = mask.repeat(1, 1, self.n_agents).view(-1)
+        # mask = mask.repeat(1, 1, self.n_agents)
         # actions = batch["u"][:, :-1]
         actions = batch["u"]
-        avail_u= batch["avail_u"]
+        avail_u = batch["avail_u"]
         # terminated = batch["terminated"][:, :-1].float()
         # avail_actions = batch["avail_u"][:, :-1]
 
         if self.args.cuda:
-            # s = s.cuda()
+            s = s.cuda()
             # u = u.cuda()
             # r = r.cuda()
             # s_next = s_next.cuda()
             # terminated = terminated.cuda()
-            actions=actions.cuda()
-            avail_u=avail_u.cuda()
+            actions = actions.cuda()
+            avail_u = avail_u.cuda()
             mask = mask.cuda()
 
         # # build q
@@ -130,6 +142,8 @@ class QMIX_PG():
         q_evals, q_targets = [], []
 
         actions_prob = []
+        actions_logprobs = []
+        actions_probs_nozero = []
         # self.agent.init_hidden(batch.batch_size)
         # self.policy_hidden= self.policy.init_hidden().unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
         for transition_idx in range(max_episode_len):
@@ -138,7 +152,8 @@ class QMIX_PG():
                 inputs = inputs.cuda()
                 inputs_next = inputs_next.cuda()
                 self.eval_hidden = self.eval_hidden.cuda()
-            q_eval, self.eval_hidden = self.eval_rnn(inputs,self.eval_hidden)  # inputs维度为(40,96)，得到的q_eval维度为(40,n_actions) Q_i
+            q_eval, self.eval_hidden = self.eval_rnn(inputs,
+                                                     self.eval_hidden)  # inputs维度为(40,96)，得到的q_eval维度为(40,n_actions) Q_i
             # 把q_eval维度重新变回(8, 5,n_actions)
             q_eval = q_eval.view(episode_num, self.n_agents, -1)
             q_evals.append(q_eval)
@@ -148,49 +163,102 @@ class QMIX_PG():
             reshaped_avail_actions = avail_actions_.reshape(episode_num * self.n_agents, -1)
             agent_outs[reshaped_avail_actions == 0] = -1e11
             # agent_outs = torch.nn.functional.softmax(agent_outs, dim=-1)
-            agent_outs = gumbel_softmax(agent_outs, hard=False)
+            # agent_outs = gumbel_softmax(agent_outs, hard=False)
+            agent_outs = F.softmax(agent_outs / 1, dim=1)  # 概率分布
             # If hard=True, then the returned sample will be one-hot, otherwise it will
             # be a probabilitiy distribution that sums to 1 across classes
             agent_outs = agent_outs.view(episode_num, self.n_agents, -1)
-            actions_prob.append(agent_outs) # 每个动作的概率
+            actions_prob.append(agent_outs)  # 每个动作的概率
+
+            # actions_prob_nozero = agent_outs.clone()
+            # actions_prob_nozero[reshaped_avail_actions.view(episode_num, self.n_agents, -1) == 0] = 1e-11  #  # TODO 概率没有0
+            # actions_probs_nozero.append(actions_prob_nozero)
+            # Have to deal with situation of 0.0 probabilities because we can't do log 0
+            z = agent_outs == 0.0
+            z = z.float() * 1e-8
+            actions_logprobs.append(torch.log(agent_outs + z))
 
         # 得的q_eval和q_target是一个列表，列表里装着max_episode_len个数组，数组的的维度是(episode个数, n_agents，n_actions)
         # 把该列表转化成(episode个数, max_episode_len， n_agents，n_actions)的数组
         q_vals = torch.stack(q_evals, dim=1)
 
-        # mac_out = []
-        # self.mac.init_hidden(batch.batch_size)
-        # for t in range(batch.max_seq_length - 1):
-        #     agent_outs = self.mac.forward(batch, t=t)
-        #     mac_out.append(agent_outs)
         actions_prob = torch.stack(actions_prob, dim=1)  # Concat over time
+        log_prob_pi = torch.stack(actions_logprobs, dim=1)
 
-        # Mask out unavailable actions, renormalise (as in action selection)
-        # actions_prob[avail_actions == 0] = 0
-        # actions_prob = actions_prob / actions_prob.sum(dim=-1, keepdim=True)
-        # actions_prob[avail_actions == 0] = 0
+        # cur_pol_sample_actions = np.random.choice(np.arange(self.n_actions), 1,
+        #                           p=actions_prob.detach().cpu().numpy())  # action是一个整数 按概率分布采样
+        # actor_sample_times=1
+        # for i in range(actor_sample_times):
+        # todo
+        actor_sample_times = 1
+        samples = torch.multinomial(actions_prob.view(-1, self.n_actions), actor_sample_times,
+                                    replacement=True)  # a.shape = (batch_size, num_a)
+        cur_pol_sample_actions = samples.view(episode_num, -1, self.n_agents, actor_sample_times)  # max_episode_len
+        #### actor_sample_times=1
+        q_curpi_sample_actions = torch.gather(q_vals, dim=3, index=cur_pol_sample_actions).squeeze(3)  # (1,60,3)
 
-        # Calculated baseline
-        q_taken = torch.gather(q_vals, dim=3, index=actions).squeeze(3)
-        pi = actions_prob.view(-1, self.n_actions)
-        baseline = torch.sum(actions_prob * q_vals, dim=-1).view(-1).detach()
+        #### actor_sample_times
+        # q_curpi_sample_actions = torch.gather(q_vals, dim=3,index=cur_pol_sample_actions) # (1,60,3)  todo actor_sample_times
+        # q_curpi_sample_actions = q_curpi_sample_actions.permute(3, 0, 1, 2).reshape(-1, max_episode_len, self.n_agents)  # todo actor_sample_times
+        # s = s.repeat(repeats=(actor_sample_times, 1, 1))  # (1,60,3) todo actor_sample_times
+        # mask = mask.repeat(repeats=(actor_sample_times, 1, 1)).view(-1)  # (1,60,3) todo actor_sample_times
 
-        # Calculate policy grad with mask
-        pi_taken = torch.gather(pi, dim=1, index=actions.reshape(-1, 1)).squeeze(1)
-        pi_taken[mask == 0] = 1.0
-        log_pi_taken = torch.log(pi_taken)
-        # coe = self.mixer.k(states).view(-1)
+        q_curpi_sample = self.eval_qmix_net(q_curpi_sample_actions, s).detach()  # TODO # (1,60,1)
+        Q_curpi_sample = q_curpi_sample.repeat(repeats=(1, 1, self.n_agents))  # (1,60,3)
 
-        advantages = (q_taken.view(-1) - baseline).detach()
-        # advantages = (-log_pi_taken + q_taken.view(-1).detach() - baseline) # TODO
+        # q_targets_mean = torch.sum(actions_prob * q_vals, dim=-1).view(-1).detach() # (180)
 
-        # coma_loss = - ((coe * advantages * log_pi_taken) * mask).sum() / mask.sum()
-        policy_loss = - ((advantages * log_pi_taken) * mask).sum() / mask.sum()
+        # q_i_mean_negi_mean = torch.sum(actions_prob * (-self.alpha * log_prob_pi + q_vals), dim=-1)  # (1,60,3) # TODO
+        q_i_mean_negi_mean = torch.sum(actions_prob * q_vals, dim=-1)  # (1,60,3) # TODO
+        # q_i_mean_negi_mean = q_i_mean_negi_mean.repeat(repeats=(actor_sample_times, 1, 1))  # todo actor_sample_times
+        q_i_mean_negi_sample = []
+        # torch.stack( [torch.cat((q_targets_mean[:, :, i].unsqueeze(2), torch.cat((q_taken[:, :, :i], q_taken[:, :, i + 1:]), dim=2)),
+        # dim=2) for i in range(3)],dim=1) # 顺序不对
+        q_curpi_sample_actions_detached = q_curpi_sample_actions.detach()
+        for i in range(self.n_agents):
+            q_temp = copy.deepcopy(q_curpi_sample_actions_detached)
+            q_temp[:, :, i] = q_i_mean_negi_mean[:, :, i]  # q_i(mean_action) q_-i(tacken_action),
+            q_i_mean_negi_sample.append(q_temp)
+        q_i_mean_negi_sample = torch.stack(q_i_mean_negi_sample, dim=2)  # [1, 60, 3, 3]
+        q_i_mean_negi_sample = q_i_mean_negi_sample.view(episode_num, -1, self.n_agents)  # [1, 60*3, 3]
+
+        # s_repeat = s.repeat(repeats=(1, self.n_agents, 1))  # (1,60,48)-> # (1,60*3,48) #TODO 顺序错误
+        s_repeat = s.repeat(repeats=(1, 1, self.n_agents))  # (1,60,48)-> # (1,60,48*3)
+        # s_repeat = s_repeat.view(episode_num, self.n_agents, -1)  # (1,60,48*3)-> # (1,3,48*60)#TODO 一样的
+        s_repeat = s_repeat.view(episode_num, self.n_agents * max_episode_len,
+                                 self.args.state_shape)  # (1,60,48*3)-> # (1,60*3,48)#
+
+        Q_i_mean_negi_sample = self.eval_qmix_net(q_i_mean_negi_sample, s_repeat).detach()  # TODO #  (1,60*3,1)
+        # q_total_target = q_total_target.repeat(repeats=(1, 1, self.n_agents)) # (1,60,3)
+        Q_i_mean_negi_sample = Q_i_mean_negi_sample.view(episode_num, -1, self.n_agents)  # (1,60*3,1)->(1,60,3)
+
+        ###方法1
+        # pi = actions_prob.view(-1, self.n_actions)
+        # # Calculate policy grad with mask
+        # pi_sample = torch.gather(pi, dim=1, index=cur_pol_sample_actions.reshape(-1, 1)).squeeze(1)
+        # pi_sample[mask == 0] = 1.0
+        # log_pi_sample = torch.log(pi_sample)
+        ###方法2
+        log_pi_sample = torch.gather(log_prob_pi, dim=3, index=cur_pol_sample_actions).squeeze(-1).view(-1)
+
+        # advantages = (-self.alpha * log_pi_sample + (Q_curpi_sample.view(-1) - Q_i_mean_negi_sample.view(-1)).detach())  # TODO Bug?
+        advantages = (-self.alpha * log_pi_sample + Q_curpi_sample.view(-1) - Q_i_mean_negi_sample.view(-1)).detach() # TODO
+        # if self.args.advantage_norm:  # TODO
+        #     EPS = 1e-10
+        #     advantages = (advantages - advantages.mean()) / (advantages.std() + EPS)
+
+        policy_loss = - ((advantages * log_pi_sample) * mask).sum() / mask.sum()
 
         # Optimise agents
         self.policy_optimiser.zero_grad()
+        # don't want critic to accumulate gradients from policy loss
+        disable_gradients(self.eval_rnn)
+        disable_gradients(self.eval_qmix_net)
         policy_loss.backward()  # policy gradient
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.policy_params, self.args.grad_norm_clip)
+        enable_gradients(self.eval_rnn)
+        enable_gradients(self.eval_qmix_net)
+
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.policy_params, self.args.grad_norm_clip)  # 0.5 todo
         self.policy_optimiser.step()
 
         # compute parameters sum for debugging
@@ -199,20 +267,9 @@ class QMIX_PG():
             p_sum += p.data.abs().sum().item() / 100.0
 
         self.soft_update()
-        # if t_env - self.log_stats_t >= self.args.learner_log_interval:
-        #     ts_logged = len(log["critic_loss"])
-        #     for key in ["critic_loss", "critic_grad_norm", "td_error_abs", "q_taken_mean", "target_mean", "q_max_mean",
-        #                 "q_min_mean", "q_max_var", "q_min_var"]:
-        #         self.logger.log_stat(key, sum(log[key]) / ts_logged, t_env)
-        #     self.logger.log_stat("q_max_first", log["q_max_first"], t_env)
-        #     self.logger.log_stat("q_min_first", log["q_min_first"], t_env)
-        #     # self.logger.log_stat("advantage_mean", (advantages * mask).sum().item() / mask.sum().item(), t_env)
-        #     self.logger.log_stat("coma_loss", coma_loss.item(), t_env)
-        #     self.logger.log_stat("agent_grad_norm", grad_norm, t_env)
-        #     self.logger.log_stat("pi_max", (pi.max(dim=1)[0] * mask).sum().item() / mask.sum().item(), t_env)
-        #     self.log_stats_t = t_env
 
-    def train_critic(self, batch, max_episode_len, train_step, epsilon=None):  # train_step表示是第几次学习，用来控制更新target_net网络的参数
+    def train_critic(self, batch, max_episode_len, train_step,
+                     epsilon=None):  # train_step表示是第几次学习，用来控制更新target_net网络的参数
         '''
         在learn的时候，抽取到的数据是四维的，四个维度分别为 1——第几个episode 2——episode中第几个transition
         3——第几个agent的数据 4——具体obs维度。因为在选动作时不仅需要输入当前的inputs，还要给神经网络输入hidden_state，
@@ -227,10 +284,13 @@ class QMIX_PG():
             else:
                 batch[key] = torch.tensor(batch[key], dtype=torch.float32)
         s, s_next, u, r, avail_u, avail_u_next, terminated = batch['s'], batch['s_next'], batch['u'], \
-                                                             batch['r'],  batch['avail_u'], batch['avail_u_next'],\
+                                                             batch['r'], batch['avail_u'], batch['avail_u_next'], \
                                                              batch['terminated']
         mask = 1 - batch["padded"].float()  # 用来把那些填充的经验的TD-error置0，从而不让它们影响到学习
-
+        mask[:, 1:] = mask[:, 1:] * (1 - terminated[:, :-1])
+        mask = mask.repeat(1, 1, self.n_agents)
+        # r = 10. * (r - r.mean()) / (r.std() + 1e-6)  # normalize with batch mean and std; plus a small number to prevent numerical problem
+        r = (r - r.mean()) / (r.std() + 1e-6)  # todo
         # 得到每个agent对应的Q值，维度为(episode个数, max_episode_len， n_agents， n_actions)
         q_evals, q_targets = self.get_q_values(batch, max_episode_len)
         q_evals_2, q_targets_2 = self.get_q_values_2(batch, max_episode_len)
@@ -249,7 +309,8 @@ class QMIX_PG():
         q_targets_sample = []
 
         actions_prob = []
-        actions_next_sample=[]
+        actions_probs_nozero = []
+        actions_logprobs = []
         # self.agent.init_hidden(batch.batch_size)
         # self.policy_hidden= self.policy.init_hidden().unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
         for transition_idx in range(max_episode_len):
@@ -257,7 +318,8 @@ class QMIX_PG():
             if self.args.cuda:
                 inputs = inputs.cuda()
                 inputs_next = inputs_next.cuda()
-            agent_outs, self.target_policy_hidden = self.target_policy(inputs_next, self.target_policy_hidden)
+            # agent_outs, self.target_policy_hidden = self.target_policy(inputs_next, self.target_policy_hidden)
+            agent_outs, self.policy_hidden = self.agent.policy(inputs_next, self.policy_hidden)
             avail_actions_ = avail_u[:, transition_idx]
             reshaped_avail_actions = avail_actions_.reshape(episode_num * self.n_agents, -1)
             agent_outs[reshaped_avail_actions == 0] = -1e11
@@ -268,27 +330,60 @@ class QMIX_PG():
             # # action_next = torch.nonzero(agent_outs).squeeze()
             # actions_next_sample.append(action_next) # 选择动作的序号
 
-            agent_outs = gumbel_softmax(agent_outs, hard=True)  # 概率 TODO ac_mean
-            agent_outs = agent_outs.view(episode_num, self.n_agents, -1)
-            actions_prob.append(agent_outs) # 每个动作的概率
+            # agent_outs = gumbel_softmax(agent_outs, hard=True)  # 概率 TODO ac_mean
+            agent_outs = F.softmax(agent_outs / 1, dim=1)  # 概率分布
+            agent_outs = agent_outs.view(episode_num, self.n_agents, -1)  # 概率有0
+            actions_prob.append(agent_outs)  # 每个动作的概率
+
+            # actions_prob_nozero=agent_outs.clone()
+            # actions_prob_nozero[reshaped_avail_actions.view(episode_num, self.n_agents, -1) == 0] = 1e-11 # 概率没有0
+            # actions_probs_nozero.append(actions_prob_nozero)
+
+            # Have to deal with situation of 0.0 probabilities because we can't do log 0
+            z = agent_outs == 0.0
+            z = z.float() * 1e-8
+            actions_logprobs.append(torch.log(agent_outs + z))
 
         actions_prob = torch.stack(actions_prob, dim=1)  # Concat over time
+        log_prob_pi = torch.stack(actions_logprobs, dim=1)  # Concat over time
+
+        # actions_probs_nozero = torch.stack(actions_probs_nozero, dim=1)  # Concat over time
+        # actions_probs_nozero[mask == 0] = 1.0
+        # log_prob_pi = torch.log(actions_probs_nozero)
+
+        # Updating alpha wrt entropy
+        # alpha = 0.0  # trade-off between exploration (max entropy) and exploitation (max Q)
+        target_entropy = -1. * self.n_actions
+        if self.args.auto_entropy is True:
+            #  alpha_loss = -(self.log_alpha * (log_prob + target_entropy).detach()).mean() #target_entropy=-2
+            alpha_loss = (torch.sum(actions_prob.detach() * (-self.log_alpha * (log_prob_pi + target_entropy).detach()),
+                                    dim=-1) * mask).sum() / mask.sum()
+            # print('alpha loss: ',alpha_loss)
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
+            self.alpha = self.log_alpha.exp()
+        else:
+            self.alpha = 1.
+            alpha_loss = 0
 
         # Calculated baseline
-        q_targets_sample = torch.sum(actions_prob * q_targets, dim=-1).view(episode_num, max_episode_len, -1).detach()  # (1,60,3) TODO ac_mean
-        q_targets_sample_2 = torch.sum(actions_prob * q_targets_2, dim=-1).view(episode_num, max_episode_len, -1).detach()  # (1,60,3)
+        q_targets_sample = torch.sum(actions_prob * (q_targets - self.alpha * log_prob_pi), dim=-1).view(
+            episode_num, max_episode_len, -1).detach()  # (1,60,3) TODO ac_mean
+        q_targets_sample_2 = torch.sum(actions_prob * (q_targets_2 - self.alpha * log_prob_pi),
+                                       dim=-1).view(episode_num, max_episode_len, -1).detach()  # (1,60,3)
 
         # actions_next_sample = torch.stack(actions_next_sample, dim=1)  # Concat over time # (1,60,3,1) TODO ac_sample1
         # # q_targets_sample = q_targets[:,:,actions_next]
         # q_targets_sample = torch.gather(q_targets, dim=3, index=actions_next_sample).squeeze(3) # (1,60,3)
 
-        q_total_eval = self.eval_qmix_net(q_evals, s) # [1, 60, 1]
+        q_total_eval = self.eval_qmix_net(q_evals, s)  # [1, 60, 1]
         q_total_target = self.target_qmix_net(q_targets_sample, s_next)
 
         q_total_eval_2 = self.eval_qmix_net_2(q_evals_2, s)  # [1, 60, 1]
         q_total_target_2 = self.target_qmix_net_2(q_targets_sample_2, s_next)
 
-        q_total_target_min = torch.min(q_total_target,q_total_target_2)
+        q_total_target_min = torch.min(q_total_target, q_total_target_2)
         q_total_target = q_total_target_min
 
         targets = r + self.args.gamma * q_total_target * (1 - terminated)
@@ -317,7 +412,10 @@ class QMIX_PG():
         #     self.target_rnn.load_state_dict(self.eval_rnn.state_dict())
         #     self.target_qmix_net.load_state_dict(self.eval_qmix_net.state_dict())
         #     self.target_policy.load_state_dict(self.agent.policy.state_dict()) #TODO
-            # Update the frozen target models
+        # Update the frozen target models
+
+        if train_step % 10000 == 0:  # how often to save the model args.save_cycle = 5000
+            self.save_model(train_step)  # TODO
 
     def _get_inputs(self, batch, transition_idx):
         # 取出所有episode上该transition_idx的经验，u_onehot要取出所有，因为要用到上一条
@@ -345,7 +443,7 @@ class QMIX_PG():
         # 因为这里所有agent共享一个神经网络，每条数据中带上了自己的编号，所以还是自己的数据
         inputs = torch.cat([x.reshape(episode_num * self.args.n_agents, -1) for x in inputs], dim=1)
         inputs_next = torch.cat([x.reshape(episode_num * self.args.n_agents, -1) for x in inputs_next], dim=1)
-        return inputs, inputs_next #(3,42)
+        return inputs, inputs_next  # (3,42)
 
     def get_q_values(self, batch, max_episode_len):
         episode_num = batch['o'].shape[0]
@@ -357,7 +455,8 @@ class QMIX_PG():
                 inputs_next = inputs_next.cuda()
                 self.eval_hidden = self.eval_hidden.cuda()
                 self.target_hidden = self.target_hidden.cuda()
-            q_eval, self.eval_hidden = self.eval_rnn(inputs, self.eval_hidden)  # inputs维度为(40,96)，得到的q_eval维度为(40,n_actions)
+            q_eval, self.eval_hidden = self.eval_rnn(inputs,
+                                                     self.eval_hidden)  # inputs维度为(40,96)，得到的q_eval维度为(40,n_actions)
             q_target, self.target_hidden = self.target_rnn(inputs_next, self.target_hidden)
 
             # 把q_eval维度重新变回(8, 5,n_actions)
@@ -381,9 +480,9 @@ class QMIX_PG():
                 inputs_next = inputs_next.cuda()
                 self.eval_hidden = self.eval_hidden.cuda()
                 self.target_hidden = self.target_hidden.cuda()
-            q_eval, self.eval_hidden = self.eval_rnn_2(inputs,
-                                                     self.eval_hidden)  # inputs维度为(40,96)，得到的q_eval维度为(40,n_actions)
-            q_target, self.target_hidden = self.target_rnn_2(inputs_next, self.target_hidden)
+            q_eval, self.eval_hidden_2 = self.eval_rnn_2(inputs,
+                                                         self.eval_hidden_2)  # inputs维度为(40,96)，得到的q_eval维度为(40,n_actions)
+            q_target, self.target_hidden_2 = self.target_rnn_2(inputs_next, self.target_hidden_2)
 
             # 把q_eval维度重新变回(8, 5,n_actions)
             q_eval = q_eval.view(episode_num, self.n_agents, -1)
@@ -400,16 +499,25 @@ class QMIX_PG():
         # 为每个episode中的每个agent都初始化一个eval_hidden、target_hidden
         self.eval_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
         self.target_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
+        self.eval_hidden_2 = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
+        self.target_hidden_2 = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
         self.policy_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
-        self.target_policy_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim)) #TODO
+        # self.target_policy_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))  # TODO
+        if self.args.cuda:
+            self.eval_hidden = self.eval_hidden.cuda()
+            self.target_hidden = self.target_hidden.cuda()
+            self.eval_hidden_2 = self.eval_hidden.cuda()
+            self.target_hidden_2 = self.target_hidden.cuda()
+            self.policy_hidden = self.policy_hidden.cuda()
+            # self.target_policy_hidden = self.target_policy_hidden.cuda()
 
     def save_model(self, train_step):
         num = str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
         torch.save(self.eval_qmix_net.state_dict(), self.model_dir + '/' + num + '_qmix_net_params.pkl')
-        torch.save(self.eval_rnn.state_dict(),  self.model_dir + '/' + num + '_rnn_net_params.pkl')
-        torch.save(self.agent.policy.state_dict(),  self.model_dir + '/' + num + '_policy_net_params.pkl')
+        torch.save(self.eval_rnn.state_dict(), self.model_dir + '/' + num + '_rnn_net_params.pkl')
+        torch.save(self.agent.policy.state_dict(), self.model_dir + '/' + num + '_policy_net_params.pkl')
 
     def soft_update(self):
         self.tau = 0.005
@@ -421,5 +529,5 @@ class QMIX_PG():
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
         for param, target_param in zip(self.eval_qmix_net_2.parameters(), self.target_qmix_net_2.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-        for param, target_param in zip(self.agent.policy.parameters(), self.target_policy.parameters()):
-            target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+        # for param, target_param in zip(self.agent.policy.parameters(), self.target_policy.parameters()):
+        #     target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
