@@ -1,7 +1,7 @@
-# StarCraft
+# StarCraft II micromanagement
 Our code is modified from https://github.com/starry-sky6688/StarCraft
 
-Our Pytorch implementations for Decomposed Soft Actor-Critic Method for Cooperative Multi-Agent Reinforcement Learning(https://arxiv.org/abs/2104.06655). 
+This repository is our Pytorch implementations for Decomposed Soft Actor-Critic Method for Cooperative Multi-Agent Reinforcement Learning(https://arxiv.org/abs/2104.06655). 
 
 In the paper, we incorporates the idea of the multi-agent value function decomposition and soft actor-critic framework effectively and proposes a new method mSAC. 
 Experimental results demonstrate that mSAC significantly outperforms policy-based approach–COMA, and achieves competitive performance with SOTA value-based
@@ -18,7 +18,7 @@ We trained these algorithms on [SMAC](https://github.com/oxwhirl/smac), the dece
 ## Requirements
 
 - python
-- torch
+- pytorch
 - [SMAC](https://github.com/oxwhirl/smac)
 - [pysc2](https://github.com/deepmind/pysc2)
 
@@ -26,11 +26,11 @@ We trained these algorithms on [SMAC](https://github.com/oxwhirl/smac), the dece
 
 + [SMAC](https://github.com/oxwhirl/smac)
 + [pymarl](https://github.com/oxwhirl/pymarl)
-
++ [starry-sky6688](https://github.com/starry-sky6688/StarCraft)
 
 ## Quick Start
 
 ```shell
 $ python src/main.py --map=3m
 ```
-For different variant alg. , you can change this line [from runner_msac import Runner] to different runner_[alg. name] in src/main.py
+To run different variant algorithms, you can change the first line in src/main.py [from runner_msac import Runner] to different runner_[alg. name]. 
