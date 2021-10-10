@@ -10,7 +10,7 @@ from policy.qtran_base import QtranBase
 from policy.maven import MAVEN
 from torch.distributions import Categorical
 from ac_discrete.rnn_policy import rnn_policy
-from ac.misc import gumbel_softmax
+# from ac.misc import gumbel_softmax
 import torch.nn.functional as F
 
 

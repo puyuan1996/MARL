@@ -7,6 +7,8 @@ from common.arguments import get_common_args, get_coma_args, get_mixer_args, \
 import torch
 import numpy as np
 
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 if __name__ == '__main__':
     for i in range(5):
         args = get_common_args()
@@ -43,7 +45,7 @@ if __name__ == '__main__':
         print(f'map:{args.map},episode_limit:{args.episode_limit}', print(f'cuda_id:{args.cuda_id}'))
         print(f'n_epoch:{args.n_epoch}')
 
-        torch.cuda.set_device(args.cuda_id)  # todo
+        # torch.cuda.set_device(args.cuda_id)  # todo
         runner = Runner(env, args)
         if args.learn:
             runner.run(i)
