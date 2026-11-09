@@ -1,4 +1,7 @@
 # StarCraft II micromanagement
+
+[English](README.md) | [简体中文](README_zh-CN.md)
+
 Our code is modified from https://github.com/starry-sky6688/StarCraft.
 
 This repository is our Pytorch implementations for Decomposed Soft Actor-Critic Method for Cooperative Multi-Agent Reinforcement Learning(https://arxiv.org/abs/2104.06655). 
@@ -33,4 +36,21 @@ We trained these algorithms on [SMAC](https://github.com/oxwhirl/smac), the dece
 ```shell
 $ python src/main.py --map=3m
 ```
-To run different variant algorithms, you can change the first line in src/main.py [from runner_msac import Runner] to different runner_[alg. name]. 
+To run different variant algorithms, you can change the first line in src/main.py [from runner_msac import Runner] to different runner_[alg. name].
+
+## License
+
+This repository is licensed under the [MIT License](LICENSE). We welcome further analysis, use, and improvements to our implementations.
+
+## Citation
+
+If you find our [paper](https://arxiv.org/abs/2104.06655) and this repository helpful in your research, please consider citing:
+
+```bibtex
+@article{pu2021decomposed,
+  title={Decomposed soft actor-critic method for cooperative multi-agent reinforcement learning},
+  author={Pu, Yuan and Wang, Shaochen and Yang, Rui and Yao, Xin and Li, Bin},
+  journal={arXiv preprint arXiv:2104.06655},
+  year={2021}
+}
+```
